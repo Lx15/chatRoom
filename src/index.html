@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Document</title>
+    <style> 
+    *{
+      margin:0;
+      padding:0;
+      box-sizing:border-box;
+    }
+     body{
+      display:flex;
+      flex-direction: column;
+      font-size:20px;
+    }
+    
+@media screen and (min-width: 400px) {
+    .header{
+      padding:10px;
+      text-align:center;
+    }
+    .user {
+      display: flex;
+      flex-direction:row;
+      flex-wrap:nowrap;
+      justify-content: space-around;
+      align-items:center;
+    }
+    .user label{
+      width:100px;
+    }    
+    .user #username{
+      flex:4;
+      margin:0 10px;
+      height:35px;
+      border-radius:10px;
+
+    }
+    #username:focus{
+        border:solid 1px green;
+    }
+    .user button{
+      flex:2;
+      height:35px;
+      border-radius: 10px;
+      outline:none;
+      border:none;
+      font-size:20px;
+      color:white;
+      margin:0 15px;
+    }
+    #login{
+        background-color: limegreen;
+    }
+    #logout{
+        background-color: red;
+    }
+    .chat{
+      display: flex;
+      flex-direction:row;
+      background-color:lightblue;
+       height:400px;
+       margin:20px ;
+       border-radius:10px;
+    }
+    .chat .chatContent{
+      flex:3;
+      background-color:lightblue;
+      position:relative;
+    }
+    .chathistory{
+        height:300px;
+        overflow: auto;
+        margin-top:20px;
+    }
+    .nowchat{
+      position:absolute;
+      top:300px;
+      display: flex;
+      flex-direction:row;
+      flex-wrap:nowrap;
+      align-items: center;
+      justify-content:flex-start;
+    }
+    .nowchat label{
+      width:50px;
+    }
+    .nowchat textarea{
+        flex:5;
+    }
+    #send{
+        height:35px;
+        border-radius:10px;
+        border:none;
+        background-color:green;
+        color:white;
+        flex:2;
+        margin:0 20px;
+    }
+    .chat .chatlist{
+      flex:1;
+      background-color: yellowgreen;
+    }
+}
+   
+    </style>
+</head>
+<body onload="window_onload()" onunload="window_onunload()">
+  <h1 class="header">Socket.io 聊天室</h1>
+  <div class="user">
+    <label for="username">用户名：</label><input type="text" id="username" value="啦啦" /> 
+    <button onclick="login()" id="login">登录</button>
+    <button onclick="logout()" id="logout"disabled>退出</button>
+  </div>
+  <div class="chat">
+    <div class="chatContent">
+      <div class="chathistory" id="chathistory">
+
+      </div>
+      <div class="nowchat">
+        <label for="nowchat">对话</label>
+        <textarea name="nowchat" id="sendmsg" cols="100" rows="5"></textarea>
+        <button onclick="sendChat()" id="send" disabled>发送</button>
+      </div>
+    </div>
+    <div class="chatlist" id="chatlist">
+
+    </div>
+  </div>
+    <script src="/socket.io/socket.io.js"></script>
+<script>
+  
+var username,sendmsg,chathistory,userName,socket;
+
+function $(id){
+    return document.getElementById(id);
+}
+function window_onload(){
+    chathistory =$('chathistory');
+    username = $('username');
+    sendmsg = $('sendmsg');
+    username.focus();
+    username.select();
+    // sendmsg.select();
+    
+}
+function AddMsg(msg){
+  chathistory.innerHTML+=msg+'<br>';
+  if(chathistory.scrollHeight > chathistory.clientHeight){
+      chathistory.scrollTop = chathistory.scrollHeight - chathistory.clientHeight;
+  }
+}
+function login(){
+    if(username.value.trim() == ""){
+        alert('请输入用户名');
+        return ;
+    }
+   userName = username.value.trim();
+   socket =io.connect('http://localhost:80');
+   socket.on('connect',function(){
+       AddMsg('与聊天服务器已建立连接');
+       socket.on('login',function(name){
+           if(name){
+           AddMsg('欢迎用户'+name+'进入聊天室');
+          }
+       })
+       socket.on('chatlist',function(names){
+           var chatlist = $("chatlist");
+           var str="用户列表<br/>";
+           names.forEach(function(name){
+               str+=name+"<br/>"
+           })
+           chatlist.innerHTML = str;
+       })
+       socket.on('chat',function(data){
+           AddMsg(data.user+'说：'+data.msg);
+       })
+       socket.on('disconnect',function(){
+           AddMsg('与服务器的连接已断开');
+           $("send").disabled =true;
+           $("logout").disabled =true;
+           $("login").disabled ="";
+           var chatlist = $("chatlist").innerHTML ="用户列表";
+       })
+       socket.on('logout',function(name){
+          AddMsg('用户'+name+'已退出聊天室');
+       })
+       socket.on('duplicate',function(){
+         alert('该用户名已被使用');
+         $('send').disabled =true;
+         $('logout').disabled =true;
+         $('login').disabled ="";
+       })
+       socket.on('error',function(err){
+         AddMsg('与聊天服务器之间的连接发生错误');
+         socket.disconnect();
+         socket.removeAllListeners('connect');
+         io.sockets={};
+       })
+       
+   }) 
+   socket.emit('login',userName);
+       $('login').disabled= true;
+        $('logout').disabled = "";
+        $('send').disabled = "";
+}
+function sendChat(){
+    var msg = $('sendmsg').value;
+    if(msg.length>0){
+        socket.emit('chat',{
+            user:userName,
+            msg:msg
+        })
+        $('sendmsg').value = "";
+    }
+}
+function logout(){
+    socket.emit('logout',userName);
+    socket.disconnect();
+    socket.removeAllListeners('connect');
+    io.sockets={};
+    AddMsg("已断开与服务器连接");
+    var chatlist = $("chatlist");
+    chatlist.innerHTML="用户列表";
+    $("send").disabled= true;
+    $("login").disabled="";
+    $("logout").disabled=true;
+}
+function window_onunload(){
+    socket.emit('logout',userName);
+    socket.disconnect();
+}
+</script>
+</body>
+</html>
